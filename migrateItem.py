@@ -61,8 +61,7 @@ def get_logged_in_session():
 
     csrf_token = session.cookies.get("DSPACE-XSRF-COOKIE") or session.cookies.get("XSRF-TOKEN") or session.cookies.get("csrftoken") 
     DSPACE_XSRF_TOKEN = session.cookies.get("DSPACE-XSRF-TOKEN")
-    print(csrf_token)
-    print(DSPACE_XSRF_TOKEN)
+
     if not csrf_token:
         raise Exception(f"No CSRF token found in cookies: {session.cookies.get_dict()}")
     headers = {
@@ -87,11 +86,7 @@ def get_logged_in_session():
     return session
 
 def create_workspaceitem(session, item):
-    """
-    Create a workspace item in the configured collection.
-    Assumes `session` already has Authorization and XSRF token in its headers.
-    """
-    ws_url = f"{BASE_URL}/submission/workspaceitems?owningCollection={COLLECTION_UUID}"
+    ws_url = f"{BASE_URL}/submission/workspaceitems"
 
     csrf_token = session.cookies.get("DSPACE-XSRF-COOKIE")
     if not csrf_token:
@@ -103,8 +98,7 @@ def create_workspaceitem(session, item):
         "X-XSRF-TOKEN": csrf_token,
         "Authorization": session.headers.get("Authorization")
     }
-    # print()
-    resp = session.post(ws_url, item ,headers=headers)
+    resp = session.post(ws_url, json=item, headers=headers)
 
     if resp.status_code not in (200, 201):
         raise Exception(f"Failed to create workspace item: {resp.status_code} {resp.text}")
@@ -119,7 +113,8 @@ import os
 
 def upload_bitstream(session, workspace_id, file_path):
     filename = os.path.basename(file_path)
-    url = f"{BASE_URL}/submission/workspaceitems/{workspace_id}/bitstreams?name={filename}"
+    url = f"{BASE_URL}/submission/workspaceitems/{workspace_id}"
+    # server/api/workflow/workflowitems?embed=item,sections,collection
 
     csrf_token = (
         session.cookies.get("DSPACE-XSRF-COOKIE")
@@ -143,78 +138,145 @@ def upload_bitstream(session, workspace_id, file_path):
     logging.info(f"Bitstream uploaded to workspace item {workspace_id}")
     return resp.json()
 
+# def submit_to_workflow(session, workspace_id):
+#     """
+#     Submit a workspace item to workflow in DSpace 7/10.
+#     """
+#     csrf_token = (
+#         session.cookies.get("DSPACE-XSRF-COOKIE")
+#         or session.cookies.get("XSRF-TOKEN")
+#         or session.cookies.get("csrftoken")
+#     )
+#     if not csrf_token:
+#         raise Exception(f"No CSRF token found: {session.cookies.get_dict()}")
 
-def submit_to_workflow(session, workspace_id):
-    url = f"{BASE_URL}/workflow/workflowitems?embed=item,sections,collection"
-    payload = {"workspaceItem": f"/server/api/submission/workspaceitems/{workspace_id}"}
-    resp = session.post(url, json=payload)
-    if resp.status_code not in (200, 201):
-        raise Exception(f"Submit to workflow failed: {resp.status_code} {resp.text}")
-    wf_json = resp.json()
-    wf_id = wf_json.get("id")
-    logging.info(f"Workflow item created: {wf_id} from workspace {workspace_id}")
-    return wf_id, wf_json
+#     auth = session.headers.get("Authorization")
+
+#     url = f"{BASE_URL}/workflow/workflowitems"
+#     body = f"/server/api/submission/workspaceitems/{workspace_id}"
+
+#     headers = {
+#         "Authorization": auth,
+#         "X-XSRF-TOKEN": csrf_token,
+#         "Accept": "application/json",
+#         "Content-Type": "text/uri-list",
+#     }
+
+#     resp = session.post(url, headers=headers, data=body)
+#     if resp.status_code in (200, 201):
+#         wf_json = resp.json()
+#         return wf_json.get("id"), wf_json
+
+#     raise Exception(f"Submit to workflow failed: {resp.status_code} {resp.text}")
+
 
 
 def get_db_rows(limit=None):
     conn = psycopg2.connect(**SRC_DB)
     cur = conn.cursor()
     q = f"SELECT {', '.join(COMMON_COLUMNS)} FROM item"
+    print(q)
     if limit:
         q += f" LIMIT {limit}"
     cur.execute(q)
     rows = cur.fetchall()
+    print(rows)
     cur.close()
     conn.close()
     return rows
+
+def create_workspace_payload(processed):
+    """
+    Build workspace item payload with all required sections.
+    """
+    return {
+        "submissionDefinition": "traditional",
+        "owningCollection": processed.get("owning_collection") or COLLECTION_UUID,
+        "sections": {
+            "traditionalpageone": {
+                "metadata": {
+                    "dc.contributor.author": [
+                        {"value": processed.get("submitter_id") or "Unknown author", "language": None}
+                    ],
+                    "dc.title.alternative": [
+                        {"value": str(processed.get("item_id")), "language": None}
+                    ],
+                    "dc.publisher": [
+                        {"value": processed.get("owning_collection") or "Unknown publisher", "language": None}
+                    ],
+                    "dc.date.issued": [
+                        {
+                            "value": processed.get("last_modified").date().isoformat()
+                            if processed.get("last_modified") else "2025-09-12",
+                            "language": None
+                        }
+                    ],
+                    "dc.relation.ispartofseries": [
+                        {"value": processed.get("uuid"), "language": None}
+                    ],
+                    "dc.identifier.citation": [
+                        {"value": "respondent " + str(processed.get("item_id")), "language": None}
+                    ],
+                    "dc.identifier": [
+                        {"value": "pet" + str(processed.get("item_id")), "language": None}
+                    ],
+                }
+            },
+            # Add required sections: license and upload
+            "license": {"granted": True},
+            "upload": {"files": []}  # we upload separately
+        }
+    }
+
+def submit_to_workflow(session, workspace_id):
+    """
+    Submit workspace item to workflow in DSpace 10 Next.
+    Returns (workflow_id, workflow_json) on success.
+    """
+    csrf_token = (
+        session.cookies.get("DSPACE-XSRF-COOKIE")
+        or session.cookies.get("XSRF-TOKEN")
+        or session.cookies.get("csrftoken")
+    )
+    if not csrf_token:
+        raise Exception(f"No CSRF token found: {session.cookies.get_dict()}")
+
+    auth = session.headers.get("Authorization")
+    url = f"{BASE_URL}/workflow/workflowitems"
+    body = f"/server/api/submission/workspaceitems/{workspace_id}"
+
+    headers = {
+        "Authorization": auth,
+        "X-XSRF-TOKEN": csrf_token,
+        "Accept": "application/json",
+        "Content-Type": "text/uri-list",
+    }
+
+    resp = session.post(url, headers=headers, data=body)
+    if resp.status_code in (200, 201):
+        wf_json = resp.json()
+        return wf_json.get("id"), wf_json
+
+    raise Exception(f"Submit to workflow failed: {resp.status_code} {resp.text}")
 
 def migrate(limit=None):
     try:
         session = get_logged_in_session()
         rows = get_db_rows(limit=limit)
-
         for row in rows:
             processed = {
                 col: (val if val is not None else DEFAULTS.get(col))
                 for col, val in zip(COMMON_COLUMNS, row)
             }
 
-            # Default metadata payload you showed above:
-            metadata_payload = {
-                "submissionDefinition": "traditional",
-                "owningCollection": processed.get("owning_collection") or COLLECTION_UUID,
-                "sections": {
-                    "traditionalpageone": {
-                        "dc.contributor.author": [
-                            {"value": "Odisha state higher education council", "language": None}
-                        ],
-                        "dc.title.alternative": [
-                            {"value": "102", "language": None}
-                        ],
-                        "dc.publisher": [
-                            {"value": "file3", "language": None}
-                        ],
-                        "dc.date.issued": [
-                            {"value": "2025-09-12", "language": None}
-                        ],
-                        "dc.relation.ispartofseries": [
-                            {"value": "108", "language": None}
-                        ],
-                        "dc.identifier.citation": [
-                            {"value": "respondent2", "language": None}
-                        ],
-                        "dc.identifier": [
-                            {"value": "pet101", "language": None}
-                        ],
-                    }
-                },
-            }
+            metadata_payload = create_workspace_payload(processed)
 
             try:
                 ws_id, ws_json = create_workspaceitem(session, metadata_payload)
                 if FILE_PATH:
                     upload_bitstream(session, ws_id, FILE_PATH)
                 wf_id, wf_json = submit_to_workflow(session, ws_id)
+                print(f"Workflow item created: {wf_id}")
                 logging.info(
                     f"Successfully migrated DB item {processed['item_id']} → workflow item {wf_id}"
                 )
@@ -227,6 +289,7 @@ def migrate(limit=None):
     except Exception as top_e:
         logging.error(f"Migration failed at top level: {str(top_e)}")
         print("Error: check log for details.")
+
 
 if __name__ == "__main__":
     migrate(limit=1)

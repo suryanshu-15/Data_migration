@@ -1,65 +1,8 @@
-2025-09-12 17:36:19,812 - INFO - 
-Table: bitstream
-2025-09-12 17:36:19,821 - INFO - 
-Table: bitstreamformatregistry
-2025-09-12 17:36:19,824 - INFO - 
-Table: bundle
-2025-09-12 17:36:19,827 - INFO - 
-Table: bundle2bitstream
-2025-09-12 17:36:19,832 - INFO - 
-Table: checksum_results
-2025-09-12 17:36:19,835 - INFO - 
-Table: collection
-2025-09-12 17:36:19,838 - INFO - 
-Table: collection2item
-2025-09-12 17:36:19,841 - INFO - 
-Table: community
-2025-09-12 17:36:19,843 - INFO - 
-Table: community2collection
-2025-09-12 17:36:19,853 - INFO - 
-Table: dspaceobject
-2025-09-12 17:36:19,855 - INFO - 
-Table: entity_type
-2025-09-12 17:36:19,860 - INFO - 
-Table: eperson
-2025-09-12 17:36:19,863 - INFO - 
-Table: epersongroup
-2025-09-12 17:36:19,865 - INFO - 
-Table: epersongroup2eperson
-2025-09-12 17:36:19,868 - INFO - 
-Table: fileextension
-2025-09-12 17:36:19,874 - INFO - 
-Table: handle
-2025-09-12 17:36:19,879 - INFO - 
-Table: item
-2025-09-12 17:36:19,882 - INFO - 
-Table: item2bundle
-2025-09-12 17:36:19,887 - INFO - 
-Table: metadatafieldregistry
-2025-09-12 17:36:19,890 - INFO - 
-Table: metadataschemaregistry
-2025-09-12 17:36:19,894 - INFO - 
-Table: metadatavalue
-2025-09-12 17:36:19,912 - INFO - 
-Table: resourcepolicy
-2025-09-12 17:36:19,915 - INFO - 
-Table: schema_version
-2025-09-12 17:36:19,918 - INFO - 
-Table: site
-2025-09-12 17:36:19,927 - INFO - 
-Table: workspaceitem
-2025-09-12 18:27:58,686 - INFO - Workspace item created: 131
-2025-09-12 18:27:58,713 - ERROR - Error migrating DB item 1032154: File upload failed: 403 {"timestamp":"2025-09-12T12:57:58.711+00:00","status":403,"error":"Forbidden","message":"Access is denied. Invalid CSRF token.","path":"/server/api/submission/workspaceitems/131/bitstreams"}
-2025-09-12 18:27:58,713 - INFO - Migration run complete.
-2025-09-12 18:29:19,441 - INFO - Workspace item created: 132
-2025-09-12 18:29:19,470 - ERROR - Error migrating DB item 1032154: File upload failed: 405 {"type":"about:blank","title":"Method Not Allowed","status":405,"detail":"Method 'POST' is not supported.","instance":"/server/api/submission/workspaceitems/132/bitstreams"}
-2025-09-12 18:29:19,471 - INFO - Migration run complete.
-2025-09-12 18:30:06,543 - INFO - Workspace item created: 133
-2025-09-12 18:30:06,606 - ERROR - Error migrating DB item 1032154: File upload failed: 404 {"timestamp":"2025-09-12T13:00:06.604+00:00","status":404,"error":"Not Found","message":"An exception has occurred","path":"/server/api/submission/workspaceitems/133/bitstreams"}
-2025-09-12 18:30:06,606 - INFO - Migration run complete.
-2025-09-12 18:30:24,576 - INFO - Workspace item created: 134
-2025-09-12 18:30:24,604 - ERROR - Error migrating DB item 1032154: File upload failed: 405 {"type":"about:blank","title":"Method Not Allowed","status":405,"detail":"Method 'POST' is not supported.","instance":"/server/api/submission/workspaceitems/134/bitstreams"}
-2025-09-12 18:30:24,605 - INFO - Migration run complete.
-2025-09-12 18:31:23,626 - INFO - Workspace item created: 135
-2025-09-12 18:31:23,655 - ERROR - Error migrating DB item 1032154: File upload failed: 405 {"type":"about:blank","title":"Method Not Allowed","status":405,"detail":"Method 'POST' is not supported.","instance":"/server/api/submission/workspaceitems/135/bitstreams"}
-2025-09-12 18:31:23,655 - INFO - Migration run complete.
+2025-09-15 21:07:16,886 - INFO - Workspace item created: 246
+2025-09-15 21:07:17,594 - INFO - Bitstream uploaded to workspace item 246
+2025-09-15 21:07:19,154 - ERROR - Error migrating DB item 1032154: Expecting value: line 1 column 1 (char 0)
+2025-09-15 21:07:19,154 - INFO - Migration run complete.
+2025-09-15 21:12:23,199 - INFO - Workspace item created: 247
+2025-09-15 21:12:23,623 - INFO - Bitstream uploaded to workspace item 247
+2025-09-15 21:12:25,420 - ERROR - Error migrating DB item 1032154: Expecting value: line 1 column 1 (char 0)
+2025-09-15 21:12:25,420 - INFO - Migration run complete.
