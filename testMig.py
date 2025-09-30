@@ -1,67 +1,68 @@
-import requests
+import psycopg2
+import logging
 
-# ---------- CONFIG ----------
-BASE_URL = "http://your-dspace-server/api"   # e.g. http://localhost:8080/server/api
-USERNAME = "admin"
-PASSWORD = "admin"
-COLLECTION_UUID = "your-collection-uuid"     # The collection where the item goes
-FILE_PATH = "example.pdf"                    # Local file you want to upload
-# ----------------------------
-
-# 1. Authenticate and get a token
-login_url = f"{BASE_URL}/authn/login"
-session = requests.post(login_url, data={
-    "user": USERNAME,
-    "password": PASSWORD
-})
-
-if session.status_code != 200:
-    raise Exception(f"Login failed: {session.text}")
-
-token = session.headers.get("Authorization")
-headers = {"Authorization": token, "Content-Type": "application/json"}
-
-print("✅ Logged in successfully!")
-
-# 2. Create a workspace item with metadata
-workspace_url = f"{BASE_URL}/submission/workspaceitems?owningCollection={COLLECTION_UUID}"
-
-metadata = {
-    "metadata": {
-        "dc.title": [{"value": "My First Item", "language": "en"}],
-        "dc.contributor.author": [{"value": "Sachinv, User"}],
-        "dc.date.issued": [{"value": "2025-09-09"}],
-        "dc.description.abstract": [{"value": "This is an item created via API"}]
-    }
+# Database connection
+SRC_DB = {
+    "dbname": "odisha_db",
+    "user": "highcourt",
+    "password": "highcourt",
+    "host": "localhost",
+    "port": 5432
 }
 
-workspace = requests.post(workspace_url, headers=headers, json=metadata)
+# Configure logging
+logging.basicConfig(
+    filename="fetch_item_metadata.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-if workspace.status_code not in (200, 201):
-    raise Exception(f"Item creation failed: {workspace.text}")
+def fetch_item_metadata(item_id):
+    """
+    Fetch all metadata for a given item_id from DSpace database.
+    Logs results in a tabular manner.
+    """
+    conn = psycopg2.connect(**SRC_DB)
+    cur = conn.cursor()
+    
+    query = """
+    SELECT
+        ms.short_id || '.' || mf.element || 
+        COALESCE('.' || mf.qualifier, '') AS metadata_field,
+        mv.text_value,
+        mv.text_lang
+    FROM item i
+    JOIN metadatavalue mv ON i.uuid = mv.dspace_object_id
+    JOIN metadatafieldregistry mf ON mv.metadata_field_id = mf.metadata_field_id
+    JOIN metadataschemaregistry ms ON mf.metadata_schema_id = ms.metadata_schema_id
+    WHERE i.item_id = %s
+    ORDER BY metadata_field, mv.place
+    """
+    
+    cur.execute(query, (item_id,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
 
-workspace_item = workspace.json()
-workspace_id = workspace_item["id"]
-print(f"Workspace item created: {workspace_id}")
+    # Log table header
+    logging.info(f"{'Field Name':40} | {'Value':50} | {'Language':10}")
+    logging.info("-" * 110)
 
-# 3. Upload a bitstream (file)
-bitstream_url = f"{BASE_URL}/submission/workspaceitems/{workspace_id}/bitstreams"
-files = {"file": open(FILE_PATH, "rb")}
+    metadata = {}
+    for field, value, language in rows:
+        entry = {"value": value, "language": language}
+        if field in metadata:
+            metadata[field].append(entry)
+        else:
+            metadata[field] = [entry]
+        
+        # Log in a tabular format
+        logging.info(f"{field:40} | {str(value):50} | {str(language):10}")
 
-upload_headers = {"Authorization": token}
-upload = requests.post(bitstream_url, headers=upload_headers, files=files)
+    logging.info(f"Total fields fetched: {len(metadata)}")
+    return metadata
 
-if upload.status_code not in (200, 201):
-    raise Exception(f"File upload failed: {upload.text}")
-
-print("✅ File uploaded successfully!")
-
-# 4. Submit the workspace item (finalize)
-submit_url = f"{BASE_URL}/workspaceitems/{workspace_id}/submit"
-submit = requests.post(submit_url, headers=headers)
-
-if submit.status_code not in (200, 201):
-    raise Exception(f"Submit failed: {submit.text}")
-
-final_item = submit.json()
-print(f"Item created successfully! Item UUID: {final_item['id']}")
+if __name__ == "__main__":
+    item_id = 1032154  # Replace with your item ID
+    fetch_item_metadata(item_id)
+    logging.info("Metadata fetch completed successfully.")
