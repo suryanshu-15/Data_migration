@@ -147,7 +147,7 @@ def create_workspaceitem(session, item):
         "Authorization": session.headers.get("Authorization")
     }
 
-    logging.info(f"Creating workspace item with payload: {json.dumps(item)}")
+    # logging.info(f"Creating workspace item with payload: {json.dumps(item)}")
     resp = session.post(ws_url, json=item, headers=headers)
     # logging.info(f"Create workspace resp {resp.status_code}: {resp.text}")
     if resp.status_code not in (200, 201):
@@ -164,81 +164,81 @@ def create_workspaceitem(session, item):
 
 
 
-
 def patch_metadata(session, workspace_id, metadata_dict):
-    """
-    Replace the traditionalpageone metadata block for the workspace item using JSON-Patch.
-    metadata_dict should be a mapping like:
-      { "dc.title": [{ "value": "My title", "language": None }, ...], ... }
-    """
     csrf_token = _get_csrf_from_session(session)
     if not csrf_token:
         raise Exception(f"No CSRF token found before patch: {session.cookies.get_dict()}")
 
     url = f"{BASE_URL}/submission/workspaceitems/{workspace_id}"
-    patch_body = [
-    {
-        "op": "add",
-        "path": "/sections/traditionalpageone/dc.contributor.author",
-        "value": [{"value": "Default Author", "language": None}]
-    },
-    {
-        "op": "add",
-        "path": "/sections/traditionalpageone/dc.title",
-        "value": [{"value": "Default Case Number", "language": None}]
-    },
-    {
-        "op": "add",
-        "path": "/sections/traditionalpageone/dc.casetype",
-        "value": [{"value": "Default Case Type", "language": None}]
-    },
-    {
-        "op": "add",
-        "path": "/sections/traditionalpageone/dc.caseyear",
-        "value": [{"value": "2025", "language": None}]
-    },
-    {
-        "op": "add",
-        "path": "/sections/traditionalpageone/dc.cino",
-        "value": [{"value": "Default CINO", "language": None}]
-    },
-    {
-        "op": "add",
-        "path": "/sections/traditionalpageone/dc.judge.name",
-        "value": [{"value": "Default Judge", "language": None}]
-    },
-    {
-        "op": "add",
-        "path": "/sections/traditionalpageone/dc.pname",
-        "value": [{"value": "Default Petitioner", "language": None}]
-    },
-    {
-        "op": "add",
-        "path": "/sections/traditionalpageone/dc.rname",
-        "value": [{"value": "Default Respondent", "language": None}]
-    },
-    {
-        "op": "add",
-        "path": "/sections/traditionalpageone/dc.raname",
-        "value": [{"value": "Default RA", "language": None}]
-    },
-    {
-        "op": "add",
-        "path": "/sections/traditionalpageone/dc.paname",
-        "value": [{"value": "Default PA", "language": None}]
-    },
-    {
+
+    allowed_fields = {
+        "dc.contributor.author",
+        "dc.title",
+        "dc.title.alternative",
+        "dc.casetype",
+        "dc.caseyear",
+        "dc.cino",
+        "dc.judge.name",
+        "dc.pname",
+        "dc.rname",
+        "dc.raname",
+        "dc.paname",
+        "dc.case.cnrno",
+        "dc.district",
+        "dc.date.scan",
+        "dc.case.approveby",
+        "dc.date.verification",
+        "dc.barcode",
+        "dc.batch-number",
+        "dc.size",
+        "dc.date.disposal",
+        "dc.char-count",
+        "dc.date.issued",
+        "dc.publisher",
+        "dc.identifier.citation",
+        "dc.relation.ispartofseries",
+        "dc.identifier",
+        "dc.language.iso",
+    }
+
+
+    patch_body = []
+
+    for field, values in metadata_dict.items():
+        if field not in allowed_fields:
+            logging.warning(f"Skipping unsupported metadata field: {field}")
+            continue
+
+        # sanitize values: convert empty language to None
+        clean_values = []
+        for v in values:
+            clean_values.append({
+                "value": v.get("value"),
+                "language": v.get("language") if v.get("language") else None
+            })
+
+        patch_body.append({
+            "op": "add",
+            "path": f"/sections/traditionalpageone/{field}",
+            "value": clean_values
+        })
+        patch_body.append({
+            "op": "add",
+            "path": "/sections/traditionalpageone/dc.date.issued",
+            "value": [{"value": "2017-01-01", "language": None}]
+        })
+        patch_body.append({
+            "op": "add",
+            "path": "/sections/traditionalpageone/dc.cino",
+            "value": [{"value": "INVALID12345", "language": None}]
+        })
+
+    # always add license granted
+    patch_body.append({
         "op": "add",
         "path": "/sections/license/granted",
         "value": True
-    },
-    {
-        "op": "add",
-        "path": "/sections/traditionalpageone/dc.date.issued",
-        "value": [{"value": "2025-09-30", "language": None}]    
-    }
-]
-
+    })
 
     headers = {
         "Authorization": session.headers.get("Authorization"),
@@ -247,9 +247,9 @@ def patch_metadata(session, workspace_id, metadata_dict):
         "Accept": "application/json"
     }
 
-    logging.info(f"Patching metadata for workspace {workspace_id}: {json.dumps(patch_body)}")
+    logging.info(f"Patching metadata for workspace {workspace_id}")
     resp = session.patch(url, headers=headers, json=patch_body)
-    logging.info(f"Patch metadata resp {resp.status_code}: {resp.text}")
+    logging.info(f"Patch metadata resp {resp.status_code}")
 
     if resp.status_code not in (200, 201):
         raise Exception(f"Patch metadata failed: {resp.status_code} {resp.text}")
@@ -281,7 +281,7 @@ def upload_bitstream(session, workspace_id, file_path):
         files = {"file": (filename, f)}
         resp = session.post(url, headers=headers, files=files)
 
-    logging.info(f"Bitstream upload resp {resp.status_code}: {resp.text}")
+    # logging.info(f"Bitstream upload resp {resp.status_code}: {resp.text}")
     if resp.status_code not in (200, 201):
         raise Exception(f"File upload failed: {resp.status_code} {resp.text}")
 
@@ -295,69 +295,49 @@ def upload_bitstream(session, workspace_id, file_path):
 # ---------------------------
 # DB helper (unchanged)
 # ---------------------------
+def fetch_item_metadata(item_id):
+    conn = psycopg2.connect(**SRC_DB)
+    cur = conn.cursor()
+    query = """
+    SELECT
+        ms.short_id || '.' || mf.element || 
+        COALESCE('.' || mf.qualifier, '') AS metadata_field,
+        mv.text_value,
+        mv.text_lang
+    FROM item i
+    JOIN metadatavalue mv ON i.uuid = mv.dspace_object_id
+    JOIN metadatafieldregistry mf ON mv.metadata_field_id = mf.metadata_field_id
+    JOIN metadataschemaregistry ms ON mf.metadata_schema_id = ms.metadata_schema_id
+    WHERE i.item_id = %s
+    ORDER BY metadata_field, mv.place
+    """
+    cur.execute(query, (item_id,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    metadata = {}
+    for field, value, language in rows:
+        entry = {"value": value, "language": language}
+        if field in metadata:
+            metadata[field].append(entry)
+        else:
+            metadata[field] = [entry]
+    return metadata
+
 def get_db_rows(limit=None):
     conn = psycopg2.connect(**SRC_DB)
     cur = conn.cursor()
     q = f"SELECT {', '.join(COMMON_COLUMNS)} FROM item"
-    print(q)
+    # print(q)
     if limit:
         q += f" LIMIT {limit}"
     cur.execute(q)
     rows = cur.fetchall()
-    print(rows)
+    # print(rows)
     cur.close()
     conn.close()
     return rows
-
-
-# ---------------------------
-# Utility to build metadata dict from a 'processed' row (you can adapt fields as needed)
-# ---------------------------
-def build_metadata_dict(processed):
-    """
-    Build the metadata mapping for /sections/traditionalpageone/metadata
-    using all fields from your traditionalpageone form.
-    Each value is a list of objects with at least 'value' and optional 'language'.
-    Defaults are provided if processed dict has no value.
-    """
-    last_mod = processed.get("last_modified")
-    date_str = None
-    if last_mod:
-        try:
-            date_str = last_mod.date().isoformat()
-        except Exception:
-            date_str = str(last_mod)
-
-    return {
-        "dc.contributor.author": [{"value": processed.get("dc.contributor.author", "Default Author"), "language": None}],
-        "dc.title": [{"value": processed.get("dc.title", "Default Title"), "language": None}],
-        "dc.title.alternative": [{"value": processed.get("dc.title.alternative", "Default Alt Title"), "language": None}],
-        "dc.casetype": [{"value": processed.get("dc.casetype", "Default Case Type"), "language": None}],
-        "dc.caseyear": [{"value": processed.get("dc.caseyear", "2025"), "language": None}],
-        "dc.cino": [{"value": processed.get("dc.cino", "Default CINO"), "language": None}],
-        "dc.judge.name": [{"value": processed.get("dc.judge.name", "Default Judge"), "language": None}],
-        "dc.pname": [{"value": processed.get("dc.pname", "Default Petitioner"), "language": None}],
-        "dc.rname": [{"value": processed.get("dc.rname", "Default Respondent"), "language": None}],
-        "dc.raname": [{"value": processed.get("dc.raname", "Default RA"), "language": None}],
-        "dc.paname": [{"value": processed.get("dc.paname", "Default PA"), "language": None}],
-        "dc.case.cnrno": [{"value": processed.get("dc.case.cnrno", "Default CNR"), "language": None}],
-        "dc.district": [{"value": processed.get("dc.district", "Default District"), "language": None}],
-        "dc.date.scan": [{"value": processed.get("dc.date.scan", date_str or "2025-01-01"), "language": None}],
-        "dc.case.approveby": [{"value": processed.get("dc.case.approveby", "Default Approver"), "language": None}],
-        "dc.date.verification": [{"value": processed.get("dc.date.verification", "2025-01-01"), "language": None}],
-        "dc.barcode": [{"value": processed.get("dc.barcode", "Default Barcode"), "language": None}],
-        "dc.batch-number": [{"value": processed.get("dc.batch-number", "Default Batch"), "language": None}],
-        "dc.size": [{"value": processed.get("dc.size", "Default Size"), "language": None}],
-        "dc.date.disposal": [{"value": processed.get("dc.date.disposal", "2025-01-01"), "language": None}],
-        "dc.char-count": [{"value": processed.get("dc.char-count", "0"), "language": None}],
-        "dc.date.issued": [{"value": processed.get("dc.date.issued", date_str or "2025-01-01"), "language": None}],
-        "dc.publisher": [{"value": processed.get("dc.publisher", "Default Publisher"), "language": None}],
-        "dc.identifier.citation": [{"value": processed.get("dc.identifier.citation", "Default Citation"), "language": None}],
-        "dc.relation.ispartofseries": [{"value": processed.get("dc.relation.ispartofseries", "Default Series"), "language": None}],
-        "dc.identifier": [{"value": processed.get("dc.identifier", "Default Identifier"), "language": None}],
-        "dc.language.iso": [{"value": processed.get("dc.language.iso", "en"), "language": None}]
-    }
-
 
 
 # ---------------------------
@@ -370,7 +350,7 @@ def submit_to_workflow(session, workspace_id):
 
     auth = session.headers.get("Authorization")
     url = f"{BASE_URL}/workflow/workflowitems?embed=item,sections,collection"
-    body = f"/server/api/submission/workspaceitems/{workspace_id}"
+    body = f"{BASE_URL}/submission/workspaceitems/{workspace_id}"
 
     headers = {
         "Authorization": auth,
@@ -415,10 +395,12 @@ def migrate(limit=None):
 
             try:
                 ws_id, ws_json = create_workspaceitem(session, create_payload)
-
-                # build metadata and patch it
-                metadata_dict = build_metadata_dict(processed)
-                patch_metadata(session, ws_id, metadata_dict)
+                if not ws_id:
+                    raise Exception("No workspace ID returned after creation")
+                data = fetch_item_metadata(processed["item_id"])
+                # logging.info(data)
+                # print(data)
+                patch_metadata(session, ws_id, data)
 
                 # upload file (keeps your original upload logic)
                 if FILE_PATH:
