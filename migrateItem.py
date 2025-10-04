@@ -364,7 +364,7 @@ def migrate(limit=None):
             }
 
             try:
-                # ws_id, ws_json = create_workspaceitem(session, create_payload)
+                ws_id, ws_json = create_workspaceitem(session, create_payload)
                 if not ws_id:
                     raise Exception("No workspace ID returned after creation")
                 data = fetch_item_metadata(processed["item_id"])
