@@ -9,7 +9,6 @@ BaseException  # quiet lint if unused in some environments
 BASE_URL = "http://localhost:8080/server/api"
 USERNAME = "admin@gmail.com"
 PASSWORD = "admin"
-COLLECTION_UUID = "ff5a7efe-6537-441f-a7d8-453fc1ddf0f4"
 FILE_PATH = "./example.pdf"
 
 SRC_DB = {
@@ -37,9 +36,7 @@ DEFAULTS = {
     "discoverable": True,
     "last_modified": None,
     "item_id": 0,
-    "uuid": "00000000-0000-0000-0000-000000000000",
     "submitter_id": "1",
-    "owning_collection": COLLECTION_UUID
 }
 
 logging.basicConfig(
@@ -47,11 +44,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
-
-
-# ---------------------------
-# Keep your original login function UNCHANGED (exact logic preserved)
-# ---------------------------
 
 def get_logged_in_session():
     session = requests.Session()
@@ -63,6 +55,7 @@ def get_logged_in_session():
         }
     )
     status_resp = session.get(f"{BASE_URL}/authn/status")
+    print(session.cookies.get_dict())
     
     if status_resp.status_code != 200:
         raise Exception(f"/authn/status failed: {status_resp.status_code} {status_resp.text}")
@@ -93,10 +86,6 @@ def get_logged_in_session():
 
     return session
 
-
-# ---------------------------
-# Helper to fetch/refresh CSRF token from session cookies (used inside the functions we modify)
-# ---------------------------
 def _get_csrf_from_session(session):
     """
     Try to return a usable CSRF token. If not present, attempt a quick GET to /authn/status
@@ -124,11 +113,6 @@ def _get_csrf_from_session(session):
     )
     return token
 
-
-# ---------------------------
-# Modified: create_workspaceitem()
-# (keeps same signature as your original but robustly re-reads CSRF cookie before request)
-# ---------------------------
 def create_workspaceitem(session, item):
     """
     Create a workspace item. This function will re-check the session cookies for a valid CSRF token
@@ -161,8 +145,6 @@ def create_workspaceitem(session, item):
     ws_id = ws_json.get("id") if ws_json else None
     logging.info(f"Workspace item created: {ws_id}")
     return ws_id, ws_json
-
-
 
 def patch_metadata(session, workspace_id, metadata_dict):
     csrf_token = _get_csrf_from_session(session)
@@ -201,6 +183,21 @@ def patch_metadata(session, workspace_id, metadata_dict):
         "dc.language.iso",
     }
 
+    default_metadata = {
+        "dc.title": [{"value": "Untitled", "language": "en"}],
+        "dc.contributor.author": [{"value": "Unknown Author", "language": "en"}],
+        "dc.caseyear": [{"value": "1900", "language": None}],
+        "dc.cino": [{"value": "DEFAULTCINO", "language": None}],
+        "dc.date.issued": [{"value": "1900-01-01", "language": None}],
+        "dc.language.iso": [{"value": "en", "language": None}],
+        "dc.casetype": [{"value": "ARBA-Appeals under Arbitration Conciliation Act", "language": None}],
+        "dc.pname": [{"value": "Default Petitioner", "language": None}],
+        "dc.rname": [{"value": "Default Respondent", "language": None}],
+        "dc.paname": [{"value": "Default Petitioner Advocate", "language": None}],
+    }
+    for field, default_value in default_metadata.items():
+        if field not in metadata_dict or not metadata_dict[field]:
+            metadata_dict[field] = default_value
 
     patch_body = []
 
@@ -209,11 +206,10 @@ def patch_metadata(session, workspace_id, metadata_dict):
             logging.warning(f"Skipping unsupported metadata field: {field}")
             continue
 
-        # sanitize values: convert empty language to None
         clean_values = []
         for v in values:
             clean_values.append({
-                "value": v.get("value"),
+                "value": v.get("value") if v.get("value") else "N/A",
                 "language": v.get("language") if v.get("language") else None
             })
 
@@ -221,16 +217,6 @@ def patch_metadata(session, workspace_id, metadata_dict):
             "op": "add",
             "path": f"/sections/traditionalpageone/{field}",
             "value": clean_values
-        })
-        patch_body.append({
-            "op": "add",
-            "path": "/sections/traditionalpageone/dc.date.issued",
-            "value": [{"value": "2017-01-01", "language": None}]
-        })
-        patch_body.append({
-            "op": "add",
-            "path": "/sections/traditionalpageone/dc.cino",
-            "value": [{"value": "INVALID12345", "language": None}]
         })
 
     # always add license granted
@@ -259,10 +245,6 @@ def patch_metadata(session, workspace_id, metadata_dict):
     except ValueError:
         return None
 
-
-# ---------------------------
-# Keep upload_bitstream and other logic as-is (only minor CSRF read added)
-# ---------------------------
 def upload_bitstream(session, workspace_id, file_path):
     filename = os.path.basename(file_path)
     url = f"{BASE_URL}/submission/workspaceitems/{workspace_id}"  # keep original endpoint as you had it
@@ -291,10 +273,6 @@ def upload_bitstream(session, workspace_id, file_path):
     except ValueError:
         return None
 
-
-# ---------------------------
-# DB helper (unchanged)
-# ---------------------------
 def fetch_item_metadata(item_id):
     conn = psycopg2.connect(**SRC_DB)
     cur = conn.cursor()
@@ -329,20 +307,16 @@ def get_db_rows(limit=None):
     conn = psycopg2.connect(**SRC_DB)
     cur = conn.cursor()
     q = f"SELECT {', '.join(COMMON_COLUMNS)} FROM item"
-    # print(q)
+    print(q)
     if limit:
         q += f" LIMIT {limit}"
     cur.execute(q)
     rows = cur.fetchall()
-    # print(rows)
+    print(rows)
     cur.close()
     conn.close()
     return rows
 
-
-# ---------------------------
-# submit_to_workflow (kept mostly as your original)
-# ---------------------------
 def submit_to_workflow(session, workspace_id):
     csrf_token = _get_csrf_from_session(session)
     if not csrf_token:
@@ -370,10 +344,6 @@ def submit_to_workflow(session, workspace_id):
 
     raise Exception(f"Submit to workflow failed: {resp.status_code} {resp.text}")
 
-
-# ---------------------------
-# Main migration flow (uses the modified create_workspaceitem + patch_metadata)
-# ---------------------------
 def migrate(limit=None):
     try:
         session = get_logged_in_session()
@@ -387,14 +357,14 @@ def migrate(limit=None):
             # create a minimal workspace item (license only) so the API creates the sections
             create_payload = {
                 "submissionDefinition": "traditional",
-                "owningCollection": processed.get("owning_collection") or COLLECTION_UUID,
+                "owningCollection": processed.get("owning_collection"),
                 "sections": {
                     "license": {"granted": True}
                 }
             }
 
             try:
-                ws_id, ws_json = create_workspaceitem(session, create_payload)
+                # ws_id, ws_json = create_workspaceitem(session, create_payload)
                 if not ws_id:
                     raise Exception("No workspace ID returned after creation")
                 data = fetch_item_metadata(processed["item_id"])
@@ -422,6 +392,5 @@ def migrate(limit=None):
         logging.error(f"Migration failed at top level: {str(top_e)}")
         print("Error: check log for details.")
 
-
 if __name__ == "__main__":
-    migrate(limit=1)
+    migrate(limit=5)
